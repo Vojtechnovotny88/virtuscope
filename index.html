@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VirtuScope — AR vizualizace nemovitostí</title>
+    <meta name="description" content="Prémiový AR vizualizační nástroj pro developery nemovitostí. Oživte své plány v měřítku 1:1.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ========== RESET & VARIABLES ========== */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #06080f;
+            --bg-secondary: #0a0e1a;
+            --bg-card: rgba(12, 17, 35, 0.6);
+            --blue-electric: #0af;
+            --blue-deep: #0066ff;
+            --blue-glow: rgba(0, 170, 255, 0.35);
+            --blue-subtle: rgba(0, 170, 255, 0.08);
+            --neon-cyan: #00e5ff;
+            --neon-purple: #7b2fff;
+            --white: #f0f2f8;
+            --white-muted: #a0a8c0;
+            --white-dim: #5a6380;
+            --glass-bg: rgba(15, 20, 40, 0.55);
+            --glass-border: rgba(0, 170, 255, 0.12);
+            --font-display: 'Syne', sans-serif;
+            --font-body: 'DM Sans', sans-serif;
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--white);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* ========== MESH GRADIENT BACKGROUND ========== */
+        .bg-mesh {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse 80% 60% at 10% 20%, rgba(0, 102, 255, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 80% at 90% 80%, rgba(123, 47, 255, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0, 229, 255, 0.03) 0%, transparent 70%);
+        }
+
+        .bg-noise {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 256px 256px;
+        }
+
+        /* ========== NAVIGATION ========== */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1.25rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(6, 8, 15, 0.7);
+            border-bottom: 1px solid var(--glass-border);
+            transition: var(--transition);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            text-decoration: none;
+        }
+
+        .nav-logo svg {
+            width: 36px;
+            height: 36px;
+        }
+
+        .nav-logo-text {
+            font-family: var(--font-display);
+            font-size: 1.35rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--white) 0%, var(--blue-electric) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2.5rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            font-family: var(--font-body);
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--white-muted);
+            text-decoration: none;
+            transition: color var(--transition);
+            letter-spacing: 0.01em;
+        }
+
+        .nav-links a:hover {
+            color: var(--blue-electric);
+        }
+
+        .nav-phone {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--white-muted);
+            text-decoration: none;
+            transition: color var(--transition);
+        }
+
+        .nav-phone:hover {
+            color: var(--blue-electric);
+        }
+
+        .nav-phone svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+        }
+
+        .nav-burger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .nav-burger span {
+            display: block;
+            width: 24px;
+            height: 2px;
+            background: var(--white);
+            border-radius: 2px;
+            transition: var(--transition);
+        }
+
+        /* ========== CONTAINER ========== */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* ========== HERO ========== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8rem 2rem 4rem;
+            position: relative;
+        }
+
+        .hero-inner {
+            max-width: 1200px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .hero-content {
+            z-index: 2;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.45rem 1rem;
+            background: var(--blue-subtle);
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--blue-electric);
+            margin-bottom: 2rem;
+            letter-spacing: 0.03em;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--blue-electric);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--blue-electric);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.4); }
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2.4rem, 5vw, 3.8rem);
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, var(--blue-electric) 0%, var(--neon-cyan) 50%, var(--neon-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.15rem;
+            color: var(--white-muted);
+            line-height: 1.7;
+            max-width: 480px;
+            margin-bottom: 2.5rem;
+            font-weight: 400;
+        }
+
+        .hero-cta-group {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* ========== BUTTONS ========== */
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 1rem 2rem;
+            font-family: var(--font-display);
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--bg-primary);
+            background: linear-gradient(135deg, var(--blue-electric) 0%, var(--neon-cyan) 100%);
+            border: none;
+            border-radius: 100px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            letter-spacing: 0.01em;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: inherit;
+            background: linear-gradient(135deg, var(--blue-electric), var(--neon-cyan), var(--neon-purple));
+            z-index: -1;
+            opacity: 0;
+            filter: blur(16px);
+            transition: opacity var(--transition);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 40px var(--blue-glow);
+        }
+
+        .btn-primary:hover::before {
+            opacity: 1;
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 1.8rem;
+            font-family: var(--font-display);
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--white);
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 100px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: var(--transition);
+            letter-spacing: 0.01em;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--blue-electric);
+            color: var(--blue-electric);
+            background: var(--blue-subtle);
+        }
+
+        /* ========== PHONE MOCKUP ========== */
+        .hero-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .phone-wrapper {
+            position: relative;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(2deg); }
+            33% { transform: translateY(-14px) rotate(0deg); }
+            66% { transform: translateY(-6px) rotate(3deg); }
+        }
+
+        .phone-glow {
+            position: absolute;
+            inset: -40px;
+            background: radial-gradient(ellipse at center, var(--blue-glow) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(40px);
+            animation: glow-pulse 4s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow-pulse {
+            0% { opacity: 0.4; transform: scale(0.95); }
+            100% { opacity: 0.8; transform: scale(1.05); }
+        }
+
+        .phone-frame {
+            position: relative;
+            width: 280px;
+            height: 560px;
+            background: linear-gradient(145deg, #1a1f35 0%, #0d1020 100%);
+            border-radius: 40px;
+            border: 2px solid rgba(0, 170, 255, 0.2);
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.05),
+                0 30px 80px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+            z-index: 2;
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 26px;
+            background: #06080f;
+            border-radius: 20px;
+            z-index: 5;
+        }
+
+        .phone-screen {
+            position: absolute;
+            inset: 8px;
+            border-radius: 32px;
+            background: linear-gradient(180deg, #080c18 0%, #0a1025 100%);
+            overflow: hidden;
+        }
+
+        /* ========== WIREFRAME ANIMATION ON PHONE ========== */
+        .house-scene {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .house-svg {
+            width: 85%;
+            height: auto;
+        }
+
+        .house-wireframe {
+            stroke: var(--blue-electric);
+            stroke-width: 1.2;
+            fill: none;
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: draw-house 3s ease-out forwards;
+            filter: drop-shadow(0 0 4px var(--blue-glow));
+        }
+
+        .house-solid {
+            fill: rgba(0, 170, 255, 0.06);
+            stroke: var(--neon-cyan);
+            stroke-width: 0.8;
+            opacity: 0;
+            animation: reveal-solid 1.5s ease-out 2.5s forwards;
+        }
+
+        .house-details {
+            stroke: var(--neon-purple);
+            stroke-width: 0.6;
+            fill: none;
+            opacity: 0;
+            animation: reveal-solid 1s ease-out 3.5s forwards;
+            filter: drop-shadow(0 0 3px rgba(123, 47, 255, 0.4));
+        }
+
+        @keyframes draw-house {
+            to { stroke-dashoffset: 0; }
+        }
+
+        @keyframes reveal-solid {
+            to { opacity: 1; }
+        }
+
+        .phone-scan-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--blue-electric), transparent);
+            box-shadow: 0 0 20px var(--blue-electric);
+            animation: scan 4s linear infinite;
+            z-index: 3;
+        }
+
+        @keyframes scan {
+            0% { top: 10%; opacity: 0; }
+            5% { opacity: 1; }
+            95% { opacity: 1; }
+            100% { top: 90%; opacity: 0; }
+        }
+
+        .phone-ui-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 16px;
+            right: 16px;
+            z-index: 4;
+        }
+
+        .phone-ui-bar {
+            background: rgba(0, 170, 255, 0.1);
+            border: 1px solid rgba(0, 170, 255, 0.2);
+            border-radius: 12px;
+            padding: 10px 14px;
+            backdrop-filter: blur(10px);
+        }
+
+        .phone-ui-label {
+            font-family: var(--font-body);
+            font-size: 0.6rem;
+            color: var(--blue-electric);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 4px;
+        }
+
+        .phone-ui-title {
+            font-family: var(--font-display);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--white);
+        }
+
+        .phone-ui-progress {
+            margin-top: 8px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .phone-ui-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--blue-electric), var(--neon-cyan));
+            border-radius: 10px;
+            animation: progress-fill 3s ease-out 0.5s forwards;
+        }
+
+        @keyframes progress-fill {
+            to { width: 100%; }
+        }
+
+        /* Floating particles around phone */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--blue-electric);
+            border-radius: 50%;
+            opacity: 0;
+            animation: particle-float 5s ease-in-out infinite;
+        }
+
+        .particle:nth-child(1) { top: 10%; left: -20px; animation-delay: 0s; }
+        .particle:nth-child(2) { top: 30%; right: -15px; animation-delay: 1s; }
+        .particle:nth-child(3) { bottom: 20%; left: -25px; animation-delay: 2s; }
+        .particle:nth-child(4) { bottom: 40%; right: -20px; animation-delay: 3s; }
+        .particle:nth-child(5) { top: 60%; left: -10px; animation-delay: 0.5s; }
+
+        @keyframes particle-float {
+            0%, 100% { opacity: 0; transform: translateY(0) scale(0.5); }
+            25% { opacity: 0.8; transform: translateY(-20px) scale(1); }
+            75% { opacity: 0.4; transform: translateY(-40px) scale(0.8); }
+        }
+
+        /* ========== SECTION COMMON ========== */
+        section {
+            padding: 7rem 0;
+            position: relative;
+        }
+
+        .section-label {
+            font-family: var(--font-display);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--blue-electric);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 1rem;
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin-bottom: 1.2rem;
+        }
+
+        .section-subtitle {
+            font-size: 1.1rem;
+            color: var(--white-muted);
+            max-width: 560px;
+            line-height: 1.7;
+        }
+
+        /* ========== REVEAL ANIMATIONS ========== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal-delay-1 { transition-delay: 0.1s; }
+        .reveal-delay-2 { transition-delay: 0.2s; }
+        .reveal-delay-3 { transition-delay: 0.3s; }
+        .reveal-delay-4 { transition-delay: 0.4s; }
+
+        /* ========== AR EXPERIENCE SECTION ========== */
+        #ar-experience {
+            overflow: hidden;
+        }
+
+        .ar-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .ar-header .section-subtitle {
+            margin: 0 auto;
+        }
+
+        .ar-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .ar-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 2.5rem 2rem;
+            text-align: center;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ar-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(135deg, rgba(0, 170, 255, 0.05) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity var(--transition);
+        }
+
+        .ar-card:hover {
+            border-color: rgba(0, 170, 255, 0.25);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(0, 170, 255, 0.05);
+        }
+
+        .ar-card:hover::before {
+            opacity: 1;
+        }
+
+        .ar-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--blue-subtle);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            position: relative;
+        }
+
+        .ar-icon svg {
+            width: 28px;
+            height: 28px;
+            stroke: var(--blue-electric);
+            fill: none;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .ar-card h3 {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.01em;
+        }
+
+        .ar-card p {
+            font-size: 0.95rem;
+            color: var(--white-muted);
+            line-height: 1.6;
+        }
+
+        /* ========== B2B SECTION ========== */
+        #b2b {
+            overflow: hidden;
+        }
+
+        .b2b-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .b2b-features {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-top: 2.5rem;
+        }
+
+        .b2b-feature {
+            display: flex;
+            gap: 1.2rem;
+            align-items: flex-start;
+        }
+
+        .b2b-feature-icon {
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--blue-subtle);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+        }
+
+        .b2b-feature-icon svg {
+            width: 22px;
+            height: 22px;
+            stroke: var(--blue-electric);
+            fill: none;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .b2b-feature h4 {
+            font-family: var(--font-display);
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+        }
+
+        .b2b-feature p {
+            font-size: 0.9rem;
+            color: var(--white-muted);
+            line-height: 1.6;
+        }
+
+        /* B2B Visual - App mockup */
+        .b2b-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app-mockup {
+            width: 100%;
+            max-width: 460px;
+            background: linear-gradient(145deg, #111628 0%, #0a0e1a 100%);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        .app-titlebar {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 1rem 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .app-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .app-dot:nth-child(1) { background: #ff5f57; }
+        .app-dot:nth-child(2) { background: #ffbd2e; }
+        .app-dot:nth-child(3) { background: #28c840; }
+
+        .app-titlebar-text {
+            font-size: 0.75rem;
+            color: var(--white-dim);
+            margin-left: auto;
+            font-weight: 500;
+        }
+
+        .app-content {
+            padding: 1.5rem;
+        }
+
+        .app-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .app-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .app-brand-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--blue-electric), var(--neon-purple));
+        }
+
+        .app-brand-name {
+            font-family: var(--font-display);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        .app-brand-sub {
+            font-size: 0.65rem;
+            color: var(--white-dim);
+        }
+
+        .app-badge-wl {
+            font-size: 0.65rem;
+            padding: 0.3rem 0.7rem;
+            background: rgba(0, 170, 255, 0.1);
+            border: 1px solid rgba(0, 170, 255, 0.2);
+            border-radius: 100px;
+            color: var(--blue-electric);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .app-users-title {
+            font-size: 0.7rem;
+            color: var(--white-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.8rem;
+        }
+
+        .app-user-row {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.7rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .app-user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--bg-primary);
+        }
+
+        .app-user-info {
+            flex: 1;
+        }
+
+        .app-user-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--white);
+        }
+
+        .app-user-role {
+            font-size: 0.65rem;
+            color: var(--white-dim);
+        }
+
+        .app-user-status {
+            font-size: 0.6rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 100px;
+            font-weight: 600;
+        }
+
+        .status-admin {
+            background: rgba(0, 170, 255, 0.12);
+            color: var(--blue-electric);
+        }
+
+        .status-editor {
+            background: rgba(123, 47, 255, 0.12);
+            color: #a06aff;
+        }
+
+        .status-viewer {
+            background: rgba(40, 200, 64, 0.12);
+            color: #28c840;
+        }
+
+        /* ========== CONTACT SECTION ========== */
+        #contact {
+            padding-bottom: 4rem;
+        }
+
+        .contact-inner {
+            max-width: 680px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .contact-inner .section-subtitle {
+            margin: 0 auto 3rem;
+        }
+
+        .contact-glass {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 3rem;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .contact-glass::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 20%;
+            right: 20%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--blue-electric), transparent);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.2rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .form-group {
+            text-align: left;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--white-muted);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.02em;
+        }
+
+        .form-input,
+        .form-textarea {
+            width: 100%;
+            padding: 0.9rem 1.1rem;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-sm);
+            color: var(--white);
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            transition: var(--transition);
+            outline: none;
+        }
+
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: var(--white-dim);
+        }
+
+        .form-input:focus,
+        .form-textarea:focus {
+            border-color: var(--blue-electric);
+            box-shadow: 0 0 0 3px rgba(0, 170, 255, 0.1);
+            background: rgba(0, 170, 255, 0.04);
+        }
+
+        .form-textarea {
+            min-height: 130px;
+            resize: vertical;
+        }
+
+        .form-submit {
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+
+        .contact-phone {
+            margin-top: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            font-size: 0.95rem;
+            color: var(--white-muted);
+        }
+
+        .contact-phone a {
+            color: var(--blue-electric);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color var(--transition);
+        }
+
+        .contact-phone a:hover {
+            color: var(--neon-cyan);
+        }
+
+        .contact-phone svg {
+            width: 18px;
+            height: 18px;
+            stroke: var(--blue-electric);
+        }
+
+        /* ========== FOOTER ========== */
+        .footer {
+            padding: 2rem;
+            text-align: center;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .footer p {
+            font-size: 0.8rem;
+            color: var(--white-dim);
+        }
+
+        /* ========== FORM SUCCESS STATE ========== */
+        .form-success {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .form-success.active {
+            display: block;
+        }
+
+        .form-success svg {
+            width: 56px;
+            height: 56px;
+            margin-bottom: 1rem;
+        }
+
+        .form-success h3 {
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-success p {
+            color: var(--white-muted);
+            font-size: 0.95rem;
+        }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 900px) {
+            .hero-inner {
+                grid-template-columns: 1fr;
+                text-align: center;
+                gap: 3rem;
+            }
+
+            .hero-subtitle {
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .hero-cta-group {
+                justify-content: center;
+            }
+
+            .ar-grid {
+                grid-template-columns: 1fr;
+                max-width: 480px;
+                margin: 0 auto;
+            }
+
+            .b2b-layout {
+                grid-template-columns: 1fr;
+                gap: 3rem;
+            }
+
+            .b2b-visual {
+                order: -1;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                flex-direction: column;
+                padding: 1.5rem 2rem;
+                background: rgba(6, 8, 15, 0.95);
+                backdrop-filter: blur(20px);
+                border-bottom: 1px solid var(--glass-border);
+                gap: 1.2rem;
+            }
+
+            .nav-links.open {
+                display: flex;
+            }
+
+            .nav-burger {
+                display: flex;
+            }
+
+            .nav-phone-desktop {
+                display: none;
+            }
+        }
+
+        @media (max-width: 500px) {
+            .hero {
+                padding: 7rem 1rem 3rem;
+            }
+
+            section {
+                padding: 4rem 0;
+            }
+
+            .container {
+                padding: 0 1.2rem;
+            }
+
+            .contact-glass {
+                padding: 2rem 1.5rem;
+            }
+
+            .phone-frame {
+                width: 230px;
+                height: 460px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Background effects -->
+    <div class="bg-mesh"></div>
+    <div class="bg-noise"></div>
+
+    <!-- ========== NAVIGATION ========== -->
+    <nav class="nav">
+        <a href="#" class="nav-logo">
+            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="32" height="32" rx="8" stroke="url(#logo-grad)" stroke-width="2" fill="none"/>
+                <path d="M12 24L18 10L24 24" stroke="url(#logo-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 20h8" stroke="url(#logo-grad)" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="18" cy="10" r="2" fill="#0af" opacity="0.6"/>
+                <defs>
+                    <linearGradient id="logo-grad" x1="2" y1="2" x2="34" y2="34">
+                        <stop offset="0%" stop-color="#0af"/>
+                        <stop offset="100%" stop-color="#7b2fff"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <span class="nav-logo-text">VirtuScope</span>
+        </a>
+        <ul class="nav-links" id="navLinks">
+            <li><a href="#ar-experience">AR Zážitek</a></li>
+            <li><a href="#b2b">Pro firmy</a></li>
+            <li><a href="#contact">Kontakt</a></li>
+            <li>
+                <a href="tel:+420722212730" class="nav-phone">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                    </svg>
+                    +420 722 212 730
+                </a>
+            </li>
+        </ul>
+        <button class="nav-burger" id="navBurger" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+    </nav>
+
+    <!-- ========== HERO ========== -->
+    <section class="hero" id="hero">
+        <div class="hero-inner">
+            <div class="hero-content">
+                <div class="hero-badge reveal">AR Vizualizace nové generace</div>
+                <h1 class="reveal reveal-delay-1">
+                    Oživte své plány<br>
+                    <span class="gradient-text">v měřítku 1:1.</span>
+                </h1>
+                <p class="hero-subtitle reveal reveal-delay-2">
+                    Dovolte svým klientům projít se jejich budoucím domovem dřív, než položíte první cihlu.
+                </p>
+                <div class="hero-cta-group reveal reveal-delay-3">
+                    <a href="#contact" class="btn-primary">
+                        Chci cenovou nabídku
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                    <a href="#ar-experience" class="btn-secondary">
+                        Jak to funguje
+                    </a>
+                </div>
+            </div>
+
+            <div class="hero-visual reveal reveal-delay-2">
+                <div class="phone-wrapper">
+                    <div class="phone-glow"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+
+                    <div class="phone-frame">
+                        <div class="phone-notch"></div>
+                        <div class="phone-screen">
+                            <div class="phone-scan-line"></div>
+                            <div class="house-scene">
+                                <svg class="house-svg" viewBox="0 0 200 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <!-- Wireframe house -->
+                                    <g class="house-wireframe">
+                                        <!-- Main structure -->
+                                        <path d="M30 130 L30 190 L170 190 L170 130"/>
+                                        <!-- Roof -->
+                                        <path d="M20 130 L100 60 L180 130"/>
+                                        <!-- Roof ridge -->
+                                        <path d="M100 60 L100 50"/>
+                                        <!-- Windows -->
+                                        <rect x="50" y="145" width="30" height="25" rx="2"/>
+                                        <rect x="120" y="145" width="30" height="25" rx="2"/>
+                                        <!-- Door -->
+                                        <rect x="88" y="155" width="24" height="35" rx="2"/>
+                                        <!-- Garage -->
+                                        <rect x="140" y="160" width="25" height="30" rx="1"/>
+                                        <!-- Upper window -->
+                                        <rect x="82" y="100" width="36" height="22" rx="2"/>
+                                        <!-- Perspective lines -->
+                                        <path d="M30 190 L10 210"/>
+                                        <path d="M170 190 L190 210"/>
+                                        <path d="M170 130 L190 150"/>
+                                    </g>
+                                    <!-- Solid fills -->
+                                    <g class="house-solid">
+                                        <path d="M30 130 L30 190 L170 190 L170 130 L100 60 Z"/>
+                                        <path d="M20 130 L100 60 L180 130 Z"/>
+                                    </g>
+                                    <!-- Detail elements -->
+                                    <g class="house-details">
+                                        <path d="M50 190 L50 210 M80 190 L80 210 M120 190 L120 210 M150 190 L150 210"/>
+                                        <path d="M40 130 L40 190"/>
+                                        <path d="M160 130 L160 190"/>
+                                        <circle cx="55" cy="85" r="8" opacity="0.4"/>
+                                        <circle cx="145" cy="85" r="8" opacity="0.4"/>
+                                    </g>
+                                </svg>
+                            </div>
+                            <div class="phone-ui-overlay">
+                                <div class="phone-ui-bar">
+                                    <div class="phone-ui-label">Načítání modelu</div>
+                                    <div class="phone-ui-title">Vila Riviera — 3D vizualizace</div>
+                                    <div class="phone-ui-progress">
+                                        <div class="phone-ui-progress-bar"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== AR EXPERIENCE ========== -->
+    <section id="ar-experience">
+        <div class="container">
+            <div class="ar-header">
+                <div class="section-label reveal">Zážitek z AR</div>
+                <h2 class="section-title reveal reveal-delay-1">
+                    Projděte se domem,<br>který ještě nestojí.
+                </h2>
+                <p class="section-subtitle reveal reveal-delay-2">
+                    Rozšířená realita přenese vaše architektonické plány přímo na stavební pozemek — v reálné velikosti a s úchvatnými detaily.
+                </p>
+            </div>
+
+            <div class="ar-grid">
+                <!-- Card 1 -->
+                <div class="ar-card reveal">
+                    <div class="ar-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                            <path d="M2 9h20" stroke-dasharray="3 3" opacity="0.5"/>
+                        </svg>
+                    </div>
+                    <h3>Procházení zdmi</h3>
+                    <p>Klienti se volně pohybují celým interiérem. Každá místnost, každý detail — vše je na dosah ruky.</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="ar-card reveal reveal-delay-1">
+                    <div class="ar-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M21 3l-6.5 18a.55.55 0 01-1 0L10 14 3.5 10.5a.55.55 0 010-1L21 3z"/>
+                            <path d="M14 14L21 3" opacity="0.5"/>
+                            <rect x="2" y="2" width="20" height="20" rx="3" stroke-dasharray="4 4" opacity="0.3"/>
+                        </svg>
+                    </div>
+                    <h3>Reálné měřítko 1:1</h3>
+                    <p>Žádné zmenšeniny. Stavba se zobrazí přesně v těch rozměrech, v jakých bude ve skutečnosti stát.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="ar-card reveal reveal-delay-2">
+                    <div class="ar-icon">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        </svg>
+                    </div>
+                    <h3>Okamžitá vizualizace</h3>
+                    <p>Stačí namířit telefon na pozemek. Během sekund se před vámi vynoří kompletní 3D model budovy.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== B2B SECTION ========== -->
+    <section id="b2b">
+        <div class="container">
+            <div class="b2b-layout">
+                <div class="b2b-content">
+                    <div class="section-label reveal">Pro firmy</div>
+                    <h2 class="section-title reveal reveal-delay-1">
+                        Software<br>ve vašem stylu.
+                    </h2>
+                    <p class="section-subtitle reveal reveal-delay-2">
+                        Plně přizpůsobitelné řešení, které nese vaši identitu. Vaši klienti uvidí vaši značku — ne naši.
+                    </p>
+                    <div class="b2b-features">
+                        <div class="b2b-feature reveal reveal-delay-2">
+                            <div class="b2b-feature-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5"/>
+                                    <path d="M2 12l10 5 10-5"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4>Full White-label</h4>
+                                <p>Aplikace ve vašich barvách, s vaším logem a názvem. Kompletně brandovaný zážitek pro vaše klienty.</p>
+                            </div>
+                        </div>
+                        <div class="b2b-feature reveal reveal-delay-3">
+                            <div class="b2b-feature-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                                    <circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+                                    <path d="M16 3.13a4 4 0 010 7.75"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4>Správa přístupů</h4>
+                                <p>Řiďte, kdo vidí co. Přidělujte role zaměstnancům a obchodním zástupcům s granulárním nastavením oprávnění.</p>
+                            </div>
+                        </div>
+                        <div class="b2b-feature reveal reveal-delay-4">
+                            <div class="b2b-feature-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <path d="M8 21h8M12 17v4"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4>Správa projektů</h4>
+                                <p>Centrální dashboard pro všechny vaše developerské projekty. Nahrávejte modely, spravujte prezentace, sledujte statistiky.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="b2b-visual reveal reveal-delay-2">
+                    <div class="app-mockup">
+                        <div class="app-titlebar">
+                            <div class="app-dot"></div>
+                            <div class="app-dot"></div>
+                            <div class="app-dot"></div>
+                            <span class="app-titlebar-text">admin.vasefirma.cz</span>
+                        </div>
+                        <div class="app-content">
+                            <div class="app-header-row">
+                                <div class="app-brand">
+                                    <div class="app-brand-circle"></div>
+                                    <div>
+                                        <div class="app-brand-name">Vaše Firma s.r.o.</div>
+                                        <div class="app-brand-sub">Powered by VirtuScope</div>
+                                    </div>
+                                </div>
+                                <div class="app-badge-wl">WHITE-LABEL</div>
+                            </div>
+                            <div class="app-users-title">Tým — správa přístupů</div>
+                            <div class="app-user-row">
+                                <div class="app-user-avatar" style="background: linear-gradient(135deg, #0af, #0066ff);">JN</div>
+                                <div class="app-user-info">
+                                    <div class="app-user-name">Jan Novák</div>
+                                    <div class="app-user-role">Hlavní architekt</div>
+                                </div>
+                                <span class="app-user-status status-admin">Admin</span>
+                            </div>
+                            <div class="app-user-row">
+                                <div class="app-user-avatar" style="background: linear-gradient(135deg, #7b2fff, #a06aff);">PS</div>
+                                <div class="app-user-info">
+                                    <div class="app-user-name">Petra Svobodová</div>
+                                    <div class="app-user-role">Obchodní zástupce</div>
+                                </div>
+                                <span class="app-user-status status-editor">Editor</span>
+                            </div>
+                            <div class="app-user-row" style="border: none;">
+                                <div class="app-user-avatar" style="background: linear-gradient(135deg, #28c840, #20a038);">MK</div>
+                                <div class="app-user-info">
+                                    <div class="app-user-name">Martin Krejčí</div>
+                                    <div class="app-user-role">Klient — Projekt Riviera</div>
+                                </div>
+                                <span class="app-user-status status-viewer">Viewer</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== CONTACT ========== -->
+    <section id="contact">
+        <div class="container">
+            <div class="contact-inner">
+                <div class="section-label reveal">Kontakt</div>
+                <h2 class="section-title reveal reveal-delay-1">Pojďme do toho.</h2>
+                <p class="section-subtitle reveal reveal-delay-2">
+                    Napište nám a do 24 hodin se vám ozveme s řešením na míru vašim projektům.
+                </p>
+
+                <div class="contact-glass reveal reveal-delay-3">
+                    <form id="contactForm" action="https://formspree.io/f/xbdaglyr" method="POST">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label" for="name">Jméno</label>
+                                <input class="form-input" type="text" id="name" name="name" placeholder="Jan Novák" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="company">Společnost</label>
+                                <input class="form-input" type="text" id="company" name="company" placeholder="Vaše firma s.r.o.">
+                            </div>
+                            <div class="form-group full-width">
+                                <label class="form-label" for="email">E-mail</label>
+                                <input class="form-input" type="email" id="email" name="email" placeholder="jan@firma.cz" required>
+                            </div>
+                            <div class="form-group full-width">
+                                <label class="form-label" for="message">Zpráva</label>
+                                <textarea class="form-textarea" id="message" name="message" placeholder="Popište svůj projekt nebo dotaz..." required></textarea>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary form-submit" id="submitBtn">
+                            Odeslat zprávu
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                        </button>
+                    </form>
+
+                    <div class="form-success" id="formSuccess">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--neon-cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <h3>Zpráva odeslána!</h3>
+                        <p>Děkujeme za váš zájem. Ozveme se vám co nejdříve.</p>
+                    </div>
+                </div>
+
+                <div class="contact-phone reveal reveal-delay-4">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                    </svg>
+                    Raději volejte? <a href="tel:+420722212730">+420 722 212 730</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== FOOTER ========== -->
+    <footer class="footer">
+        <p>&copy; 2025 VirtuScope. Všechna práva vyhrazena.</p>
+    </footer>
+
+    <!-- ========== JAVASCRIPT ========== -->
+    <script>
+        // ===== SCROLL REVEAL =====
+        const revealElements = document.querySelectorAll('.reveal');
+
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        });
+
+        revealElements.forEach(el => revealObserver.observe(el));
+
+        // ===== MOBILE NAV =====
+        const burger = document.getElementById('navBurger');
+        const navLinks = document.getElementById('navLinks');
+
+        burger.addEventListener('click', () => {
+            navLinks.classList.toggle('open');
+        });
+
+        // Close mobile nav on link click
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.classList.remove('open');
+            });
+        });
+
+        // ===== FORM HANDLING =====
+        const form = document.getElementById('contactForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const formSuccess = document.getElementById('formSuccess');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = 'Odesílám...';
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    form.style.display = 'none';
+                    formSuccess.classList.add('active');
+                } else {
+                    throw new Error('Chyba při odesílání');
+                }
+            } catch (error) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `
+                    Zkusit znovu
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                `;
+                alert('Nepodařilo se odeslat zprávu. Zkuste to prosím znovu nebo zavolejte na +420 722 212 730.');
+            }
+        });
+
+        // ===== SMOOTH SCROLL FOR ANCHOR LINKS =====
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    const offset = 80;
+                    const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - offset;
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // ===== NAV BACKGROUND ON SCROLL =====
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('.nav');
+            const scrollY = window.scrollY;
+
+            if (scrollY > 100) {
+                nav.style.background = 'rgba(6, 8, 15, 0.92)';
+            } else {
+                nav.style.background = 'rgba(6, 8, 15, 0.7)';
+            }
+
+            lastScroll = scrollY;
+        });
+    </script>
+</body>
+</html>
